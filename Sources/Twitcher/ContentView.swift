@@ -21,7 +21,7 @@ struct ContentView: View {
                 .frame(width: 0, height: 0)
         )
         .task { await model.start() }
-        .onChange(of: model.selectedLogin) {
+        .onChange(of: model.selectedChannelID) {
             model.selectionChanged()
         }
         .onChange(of: model.detailTab) {
@@ -33,13 +33,19 @@ struct ContentView: View {
 struct DetailView: View {
     @ObservedObject var model: AppModel
 
+    /// Chat only exists for Twitch content, so the pane auto-hides on
+    /// YouTube channels (the user's show/hide preference is untouched).
+    private var chatSupported: Bool {
+        model.selectedChannel?.platform != .youtube
+    }
+
     var body: some View {
         HStack(spacing: 0) {
             mainContent
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-            if model.showChat {
+            if model.showChat && chatSupported {
                 Divider()
-                ChatPane(chat: model.chat)
+                ChatPane(chat: model.chat, replay: model.chatReplay)
                     .frame(width: 300 * model.zoom)
                     .transition(.move(edge: .trailing))
             }
@@ -55,11 +61,19 @@ struct DetailView: View {
                     .labelsHidden()
                 }
             }
+            if !model.qualities.isEmpty {
+                ToolbarItem {
+                    qualityMenu
+                }
+            }
             ToolbarItem {
                 Toggle(isOn: $model.showChat.animation(.easeInOut(duration: 0.15))) {
                     Image(systemName: "bubble.left.and.bubble.right")
                 }
-                .help(model.showChat ? "Hide chat" : "Show chat")
+                .help(chatSupported
+                    ? (model.showChat ? "Hide chat" : "Show chat")
+                    : "Chat is not available for YouTube channels")
+                .disabled(!chatSupported)
             }
         }
         .navigationTitle(model.selectedChannel?.displayName ?? "Twitcher")
@@ -92,8 +106,8 @@ struct DetailView: View {
             switch model.playback {
             case .loading(_, let message):
                 loadingView(message)
-            case .live(let player, _):
-                PlayerView(player: player)
+            case .live(let backend, _):
+                playerView(backend)
             case .failed(let message):
                 errorView(message) {
                     Button("Retry") { model.playLive(channel) }
@@ -110,7 +124,7 @@ struct DetailView: View {
     @ViewBuilder
     private func broadcastsContent(_ channel: ChannelInfo) -> some View {
         switch model.playback {
-        case .vod(let player, let vod):
+        case .vod(let backend, let vod):
             VStack(spacing: 0) {
                 HStack {
                     Button {
@@ -126,7 +140,7 @@ struct DetailView: View {
                 }
                 .padding(8)
                 Divider()
-                PlayerView(player: player)
+                playerView(backend)
             }
         case .loading(.vod, let message):
             loadingView(message)
@@ -141,7 +155,72 @@ struct DetailView: View {
         }
     }
 
+    /// Shows the rendition actually playing, so "Best" reads as e.g. 1080p60.
+    private var qualityLabel: String {
+        if model.preference == .auto { return "Auto" }
+        return model.selectedQuality?.label ?? "Best"
+    }
+
+    private var qualityMenu: some View {
+        Menu {
+            Button {
+                model.selectQuality(.best)
+            } label: {
+                Label("Best available", systemImage: model.preference == .best ? "checkmark" : "")
+            }
+            Button {
+                model.selectQuality(.auto)
+            } label: {
+                Label("Auto (adapts to connection)",
+                      systemImage: model.preference == .auto ? "checkmark" : "")
+            }
+            Divider()
+            ForEach(model.qualities) { variant in
+                Button {
+                    model.selectQuality(.height(variant.height))
+                } label: {
+                    Label(
+                        variant.label,
+                        systemImage: model.preference == .height(variant.height) ? "checkmark" : ""
+                    )
+                }
+            }
+        } label: {
+            Label(qualityLabel, systemImage: "slider.horizontal.3")
+        }
+        .help("Video quality")
+    }
+
     // MARK: - Shared pieces
+
+    @ViewBuilder
+    private func playerView(_ backend: AppModel.PlayerBackend) -> some View {
+        switch backend {
+        case .native(let player):
+            VStack(spacing: 0) {
+                PlayerView(player: player)
+                if let note = model.qualityNote {
+                    Text(note)
+                        .font(.system(size: 10 * model.zoom))
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity)
+                        .padding(4)
+                        .background(.bar)
+                }
+            }
+        case .embed(let videoID):
+            VStack(spacing: 0) {
+                EmbedPlayerView(videoID: videoID)
+                Divider()
+                Text("Embedded YouTube player — install yt-dlp (brew install yt-dlp) for native playback with resume support.")
+                    .font(.system(size: 10 * model.zoom))
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(4)
+                    .background(.bar)
+            }
+        }
+    }
 
     private func loadingView(_ message: String) -> some View {
         VStack(spacing: 12) {

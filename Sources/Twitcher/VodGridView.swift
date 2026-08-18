@@ -76,7 +76,7 @@ private struct VodCard: View {
                 .font(.system(size: 12 * zoom, weight: .medium))
                 .lineLimit(2, reservesSpace: true)
                 .multilineTextAlignment(.leading)
-            Text([vod.game, vod.formattedAge].compactMap { $0 }.joined(separator: " · "))
+            Text([vod.game, vod.formattedAge].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · "))
                 .font(.system(size: 10 * zoom))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
@@ -108,13 +108,15 @@ private struct VodCard: View {
         }
         .clipShape(RoundedRectangle(cornerRadius: 6))
         .overlay(alignment: .bottomTrailing) {
-            Text(vod.formattedLength)
-                .font(.system(size: 9 * zoom, weight: .bold).monospacedDigit())
-                .foregroundStyle(.white)
-                .padding(.horizontal, 5)
-                .padding(.vertical, 2)
-                .background(.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 4))
-                .padding(5)
+            if vod.lengthSeconds > 0 {
+                Text(vod.formattedLength)
+                    .font(.system(size: 9 * zoom, weight: .bold).monospacedDigit())
+                    .foregroundStyle(.white)
+                    .padding(.horizontal, 5)
+                    .padding(.vertical, 2)
+                    .background(.black.opacity(0.7), in: RoundedRectangle(cornerRadius: 4))
+                    .padding(5)
+            }
         }
         .overlay(alignment: .topTrailing) {
             if progress?.finished == true {

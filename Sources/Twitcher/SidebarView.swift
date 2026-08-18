@@ -6,11 +6,23 @@ struct SidebarView: View {
     @Environment(\.uiZoom) private var zoom
 
     var body: some View {
-        List(selection: $model.selectedLogin) {
-            Section("Channels") {
-                ForEach(model.channels) { channel in
-                    ChannelRow(channel: channel)
-                        .tag(channel.login)
+        List(selection: $model.selectedChannelID) {
+            let twitch = model.channels.filter { $0.platform == .twitch }
+            let youtube = model.channels.filter { $0.platform == .youtube }
+            if !twitch.isEmpty {
+                Section("Twitch") {
+                    ForEach(twitch) { channel in
+                        ChannelRow(channel: channel)
+                            .tag(channel.id)
+                    }
+                }
+            }
+            if !youtube.isEmpty {
+                Section("YouTube") {
+                    ForEach(youtube) { channel in
+                        ChannelRow(channel: channel)
+                            .tag(channel.id)
+                    }
                 }
             }
         }
@@ -90,7 +102,11 @@ private struct ChannelRow: View {
     @ViewBuilder
     private var subtitle: some View {
         if let live = channel.live {
-            Text("\(live.game ?? "Live") · \(live.viewers.formatted()) viewers")
+            let parts = [
+                live.game,
+                live.viewers > 0 ? "\(live.viewers.formatted()) viewers" : nil,
+            ].compactMap { $0 }
+            Text(parts.isEmpty ? "Live" : parts.joined(separator: " · "))
                 .font(.system(size: 10 * zoom))
                 .foregroundStyle(.secondary)
                 .lineLimit(1)

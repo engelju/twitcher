@@ -10,10 +10,16 @@ import Foundation
 /// there's always a file the user can edit.
 enum ChannelStore {
     struct ConfigFile: Codable {
-        var channels: [String]
+        /// Twitch logins.
+        var channels: [String]?
+        /// YouTube handles (with or without the leading @).
+        var youtube: [String]?
     }
 
-    static let defaultChannels = ["twitch", "twitchdev"]
+    static let defaultTwitch = ["twitch", "twitchdev"]
+    static let defaultYouTube = [
+        "YouTube", "GoogleDevelopers",
+    ]
 
     static var applicationSupportURL: URL {
         FileManager.default
@@ -21,7 +27,7 @@ enum ChannelStore {
             .appendingPathComponent("Twitcher/channels.json")
     }
 
-    static func load() -> (channels: [String], path: URL) {
+    static func load() -> (entries: [(platform: Platform, name: String)], path: URL) {
         let candidates = [
             URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
                 .appendingPathComponent("channels.json"),
@@ -31,10 +37,7 @@ enum ChannelStore {
         for url in candidates {
             if let data = try? Data(contentsOf: url),
                let config = try? JSONDecoder().decode(ConfigFile.self, from: data) {
-                let logins = config.channels
-                    .map { $0.lowercased().trimmingCharacters(in: .whitespaces) }
-                    .filter { !$0.isEmpty }
-                return (logins, url)
+                return (entries(from: config), url)
             }
         }
 
@@ -44,11 +47,25 @@ enum ChannelStore {
             at: url.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
+        let defaults = ConfigFile(channels: defaultTwitch, youtube: defaultYouTube)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted]
-        if let data = try? encoder.encode(ConfigFile(channels: defaultChannels)) {
+        if let data = try? encoder.encode(defaults) {
             try? data.write(to: url)
         }
-        return (defaultChannels, url)
+        return (entries(from: defaults), url)
+    }
+
+    private static func entries(from config: ConfigFile) -> [(platform: Platform, name: String)] {
+        let twitch = (config.channels ?? [])
+            .map { $0.lowercased().trimmingCharacters(in: .whitespaces) }
+            .filter { !$0.isEmpty }
+            .map { (Platform.twitch, $0) }
+        let youtube = (config.youtube ?? [])
+            .map { $0.trimmingCharacters(in: .whitespaces) }
+            .map { $0.hasPrefix("@") ? String($0.dropFirst()) : $0 }
+            .filter { !$0.isEmpty }
+            .map { (Platform.youtube, $0) }
+        return twitch + youtube
     }
 }
