@@ -70,12 +70,11 @@ brew install yt-dlp
 
 ## Configuring channels
 
-The app reads `channels.json` on startup, looked up in this order:
-
-1. `config/channels.json` under the current working directory (handy with
-   `swift run` from the repo; git-ignored, since it's your personal list)
-2. `~/Library/Application Support/Twitcher/channels.json` — created with
-   defaults on first launch if missing (this is what the bundled app uses)
+The app reads `~/Library/Application Support/Twitcher/channels.json` on
+startup, both when run with `swift run` and as the installed app. It's
+created with defaults on first launch if missing; if it can't be parsed
+(say, a typo while editing), the defaults are shown for that session and
+the file is left untouched so you can fix it.
 
 Format:
 

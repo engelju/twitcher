@@ -1,13 +1,10 @@
 import Foundation
 
-/// Loads the list of channels the user cares about from channels.json.
+/// Loads the list of channels the user cares about from
+/// `~/Library/Application Support/Twitcher/channels.json`.
 ///
-/// Search order:
-/// 1. `config/channels.json` under the current working directory (handy during `swift run`)
-/// 2. `~/Library/Application Support/Twitcher/channels.json`
-///
-/// If neither exists, a default file is written to Application Support so
-/// there's always a file the user can edit.
+/// If it doesn't exist, a default file is written so there's always one the
+/// user can edit.
 enum ChannelStore {
     struct ConfigFile: Codable {
         /// Twitch logins.
@@ -28,26 +25,23 @@ enum ChannelStore {
     }
 
     static func load() -> (entries: [(platform: Platform, name: String)], path: URL) {
-        let candidates = [
-            URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-                .appendingPathComponent("config/channels.json"),
-            applicationSupportURL,
-        ]
+        let url = applicationSupportURL
+        let defaults = ConfigFile(channels: defaultTwitch, youtube: defaultYouTube)
 
-        for url in candidates {
-            if let data = try? Data(contentsOf: url),
-               let config = try? JSONDecoder().decode(ConfigFile.self, from: data) {
-                return (entries(from: config), url)
-            }
+        if FileManager.default.fileExists(atPath: url.path) {
+            // An unreadable file (e.g. a typo while hand-editing) falls back
+            // to the defaults for this session but is never overwritten.
+            guard let data = try? Data(contentsOf: url),
+                  let config = try? JSONDecoder().decode(ConfigFile.self, from: data)
+            else { return (entries(from: defaults), url) }
+            return (entries(from: config), url)
         }
 
         // First launch: create a default config the user can edit.
-        let url = applicationSupportURL
         try? FileManager.default.createDirectory(
             at: url.deletingLastPathComponent(),
             withIntermediateDirectories: true
         )
-        let defaults = ConfigFile(channels: defaultTwitch, youtube: defaultYouTube)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted]
         if let data = try? encoder.encode(defaults) {
