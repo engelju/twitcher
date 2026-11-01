@@ -3,6 +3,7 @@ import SwiftUI
 
 struct SidebarView: View {
     @ObservedObject var model: AppModel
+    @ObservedObject var account: YouTubeAccount
     @Environment(\.uiZoom) private var zoom
 
     var body: some View {
@@ -17,12 +18,17 @@ struct SidebarView: View {
                     }
                 }
             }
-            if !youtube.isEmpty {
-                Section("YouTube") {
+            // Shown even without YouTube channels so its "+" button is
+            // reachable — but only once the list has loaded: an empty section
+            // that gains rows trips an NSTableView reentrancy warning.
+            if !model.channels.isEmpty {
+                Section {
                     ForEach(youtube) { channel in
                         ChannelRow(channel: channel)
                             .tag(channel.id)
                     }
+                } header: {
+                    youtubeHeader
                 }
             }
         }
@@ -43,6 +49,24 @@ struct SidebarView: View {
                 }
                 .help("Refresh live status and VODs")
                 .disabled(model.isRefreshing)
+            }
+        }
+    }
+
+    private var youtubeHeader: some View {
+        HStack {
+            Text("YouTube")
+            Spacer()
+            Button {
+                account.showingSubscriptionPicker = true
+            } label: {
+                Image(systemName: "plus")
+            }
+            .buttonStyle(.borderless)
+            .help("Add a channel you're subscribed to")
+            .popover(isPresented: $account.showingSubscriptionPicker, arrowEdge: .trailing) {
+                SubscriptionPicker(model: model, account: account)
+                    .environment(\.uiZoom, zoom)
             }
         }
     }

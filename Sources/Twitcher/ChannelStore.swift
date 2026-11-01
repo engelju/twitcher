@@ -56,6 +56,16 @@ enum ChannelStore {
         return (entries(from: defaults), url)
     }
 
+    /// Appends a YouTube channel to the config file at `url`, keeping the
+    /// rest of the file's contents.
+    static func addYouTube(_ name: String, to url: URL) throws {
+        var config = try JSONDecoder().decode(ConfigFile.self, from: Data(contentsOf: url))
+        config.youtube = (config.youtube ?? []) + [name]
+        let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
+        try encoder.encode(config).write(to: url, options: .atomic)
+    }
+
     private static func entries(from config: ConfigFile) -> [(platform: Platform, name: String)] {
         let twitch = (config.channels ?? [])
             .map { $0.lowercased().trimmingCharacters(in: .whitespaces) }

@@ -31,6 +31,25 @@ struct TwitcherApp: App {
                     .keyboardShortcut("0", modifiers: .command)
                 Divider()
             }
+            YouTubeCommands(account: model.youtubeAccount)
+        }
+    }
+}
+
+private struct YouTubeCommands: Commands {
+    @ObservedObject var account: YouTubeAccount
+
+    var body: some Commands {
+        CommandGroup(after: .appSettings) {
+            if account.isSignedIn {
+                Button("Sign Out of YouTube") {
+                    Task { await account.signOut() }
+                }
+            } else {
+                Button("Sign In to YouTube…") {
+                    account.showingSignIn = true
+                }
+            }
         }
     }
 }

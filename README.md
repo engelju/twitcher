@@ -8,6 +8,10 @@ with SwiftUI + AVPlayer.
 - **Channel sidebar** driven by `channels.json`, with Twitch and YouTube
   sections: live channels show what's on and start playing on selection;
   offline channels open on their recent broadcasts.
+- **YouTube sign-in** (Twitcher → Sign In to YouTube…, or the **+** next
+  to the sidebar's YouTube heading): the **+** lists the channels you're
+  subscribed to, searchable, and adds any of them to the sidebar and
+  `channels.json` in one click.
 - **Stream / Broadcasts tabs** in the toolbar: browse a channel's VOD
   archive even while it's live, and jump back to the stream with one click
   (switching tabs pauses/resumes playback).
@@ -76,7 +80,8 @@ Format:
 ```
 
 `channels` are Twitch logins; `youtube` are YouTube handles (the `@name`
-from the channel URL, with or without the @). The "Edit channels.json"
+from the channel URL, with or without the @) or `UC…` channel IDs.
+Channels added from your subscriptions are appended here automatically. The "Edit channels.json"
 button at the bottom of the sidebar reveals the active file in Finder.
 Restart the app (or hit refresh) after editing.
 
@@ -109,6 +114,16 @@ Restart the app (or hit refresh) after editing.
   stream. The resolver therefore retries a few times to land on the HLS
   master (1080p down to 144p), and only falls back to the low-quality
   single rendition — with an on-screen note — if every attempt misses.
+
+- `YouTubeSignInView` shows Google's sign-in page in a web view (with a
+  Safari user agent — Google rejects WKWebView's default one). The session
+  lives in WebKit's persistent data store, so it survives relaunches; sign
+  out from the app menu or the subscriptions popover.
+- `YouTubeAccount` copies the session cookies out of that store to load
+  `/feed/channels`, collects every `channelRenderer` in its `ytInitialData`,
+  and follows continuation tokens through the innertube browse API (signed
+  with the `SAPISIDHASH` header the web client uses). No API key or OAuth
+  client needed.
 
 **Quality**
 - `HLSPlaylist` parses the master playlist's `#EXT-X-STREAM-INF` entries
@@ -143,6 +158,9 @@ Restart the app (or hit refresh) after editing.
 - Without yt-dlp, YouTube cards have no duration badge (the RSS feed doesn't
   include durations).
 - Chat is Twitch-only and read-only.
+- Google occasionally refuses sign-in from embedded browsers ("This browser
+  or app may not be secure"). If that happens, retrying later usually
+  works; there's no workaround short of the official OAuth API.
 - YouTube playback quality depends on yt-dlp keeping up with YouTube; if
   videos start resolving at 360p often, `brew upgrade yt-dlp` (or
   `pip install -U yt-dlp`) is the first thing to try.

@@ -10,7 +10,7 @@ struct ChannelInfo: Identifiable, Equatable {
     /// same name can coexist.
     var id: String { "\(platform.rawValue):\(login)" }
     let platform: Platform
-    /// Twitch login or YouTube handle (without the leading @).
+    /// Twitch login, or YouTube handle (without the leading @) or UC… channel ID.
     let login: String
     var displayName: String
     var avatarURL: URL?
@@ -18,6 +18,8 @@ struct ChannelInfo: Identifiable, Equatable {
     var vods: [VodInfo]
     /// Still waiting for the first successful info fetch.
     var isPlaceholder = true
+    /// YouTube only: the UC… channel ID, once known.
+    var youtubeChannelID: String?
 }
 
 struct LiveInfo: Equatable {

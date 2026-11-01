@@ -3,10 +3,16 @@ import SwiftUI
 
 struct ContentView: View {
     @ObservedObject var model: AppModel
+    @ObservedObject var account: YouTubeAccount
+
+    init(model: AppModel) {
+        self.model = model
+        self.account = model.youtubeAccount
+    }
 
     var body: some View {
         NavigationSplitView {
-            SidebarView(model: model)
+            SidebarView(model: model, account: account)
                 .navigationSplitViewColumnWidth(min: 200, ideal: 230)
         } detail: {
             DetailView(model: model)
@@ -20,6 +26,14 @@ struct ContentView: View {
                 .opacity(0)
                 .frame(width: 0, height: 0)
         )
+        .sheet(isPresented: $account.showingSignIn, onDismiss: {
+            // Straight on to picking channels after a successful sign-in.
+            if account.isSignedIn {
+                account.showingSubscriptionPicker = true
+            }
+        }) {
+            YouTubeSignInView(account: account)
+        }
         .task { await model.start() }
         .onChange(of: model.selectedChannelID) {
             model.selectionChanged()

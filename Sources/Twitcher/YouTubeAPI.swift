@@ -4,9 +4,13 @@ import Foundation
 /// - the channel's `/live` page (HTML) for channel ID, avatar, and live status
 /// - the official RSS feed for the recent-videos list
 struct YouTubeAPI {
-    /// Returns nil when the fetch fails or the handle doesn't exist.
+    /// `handle` may also be a UC… channel ID, for channels without a handle.
+    /// Returns nil when the fetch fails or the channel doesn't exist.
     func fetchChannel(handle: String) async -> ChannelInfo? {
-        guard let html = await fetchHTML("https://www.youtube.com/@\(handle)/live"),
+        let path = Self.isChannelID(handle)
+            ? "channel/\(handle)"
+            : "@" + (handle.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? handle)
+        guard let html = await fetchHTML("https://www.youtube.com/\(path)/live"),
               let channelID = Self.firstMatch(#""externalId":"(UC[0-9A-Za-z_-]{22})""#, in: html)
                 ?? Self.firstMatch(#""channelId":"(UC[0-9A-Za-z_-]{22})""#, in: html)
         else { return nil }
@@ -62,8 +66,13 @@ struct YouTubeAPI {
             avatarURL: avatarURL,
             live: live,
             vods: vods,
-            isPlaceholder: false
+            isPlaceholder: false,
+            youtubeChannelID: channelID
         )
+    }
+
+    static func isChannelID(_ value: String) -> Bool {
+        value.count == 24 && value.hasPrefix("UC")
     }
 
     // MARK: - Full video list via yt-dlp

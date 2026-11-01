@@ -109,6 +109,7 @@ final class AppModel: ObservableObject {
     let chat = ChatClient()
     let chatReplay = ChatReplayClient()
     let watchHistory = WatchProgressStore()
+    let youtubeAccount = YouTubeAccount()
     private(set) var configPath: URL?
     private var playTask: Task<Void, Never>?
     private var progressObserver: Any?
@@ -134,6 +135,7 @@ final class AppModel: ObservableObject {
                 avatarURL: nil, live: nil, vods: []
             )
         }
+        await youtubeAccount.checkSignIn()
         await refresh()
     }
 
@@ -158,6 +160,46 @@ final class AppModel: ObservableObject {
                 if let info, let index = channels.firstIndex(where: { $0.id == info.id }) {
                     channels[index] = info
                 }
+            }
+        }
+    }
+
+    /// Whether a subscription already has a sidebar entry, matched by
+    /// handle or channel ID (channels.json may use either).
+    func isInSidebar(_ subscription: YouTubeSubscription) -> Bool {
+        channels.contains { channel in
+            guard channel.platform == .youtube else { return false }
+            return channel.youtubeChannelID == subscription.channelID
+                || channel.login == subscription.channelID
+                || channel.login.lowercased() == subscription.handle?.lowercased()
+        }
+    }
+
+    /// Adds a subscribed channel to the sidebar and channels.json, then
+    /// selects it.
+    func addYouTubeChannel(_ subscription: YouTubeSubscription) {
+        guard !isInSidebar(subscription) else { return }
+        let channel = ChannelInfo(
+            platform: .youtube, login: subscription.identifier, displayName: subscription.title,
+            avatarURL: subscription.avatarURL, live: nil, vods: [],
+            youtubeChannelID: subscription.channelID
+        )
+        channels.append(channel)
+        // On a write failure the channel still shows for this session.
+        if let configPath {
+            try? ChannelStore.addYouTube(subscription.identifier, to: configPath)
+        }
+        selectedChannelID = channel.id
+
+        Task {
+            guard let info = await YouTubeAPI().fetchChannel(handle: channel.login),
+                  let index = channels.firstIndex(where: { $0.id == info.id })
+            else { return }
+            channels[index] = info
+            // Selected before its live status was known; start the stream
+            // now if it turns out to be live.
+            if selectedChannelID == info.id, info.live != nil, case .none = playback {
+                detailTab = .stream
             }
         }
     }
