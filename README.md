@@ -168,7 +168,8 @@ Restart the app (or hit refresh) after editing.
 - The Twitch GQL/usher endpoints and the YouTube page scraping are
   **unofficial** and can break when the platforms change things. Bypassing
   the web players also skips ads, which is against both platforms' Terms of
-  Service — treat this as a personal-use tool, not something to distribute.
+  Service. This is a hobby project, provided as is — use it at your own
+  risk.
 - Without yt-dlp, YouTube cards have no duration badge (the RSS feed doesn't
   include durations).
 - Chat is Twitch-only and read-only.
@@ -187,3 +188,7 @@ Restart the app (or hit refresh) after editing.
 - Auto-refresh live status on a timer.
 - YouTube live chat (needs the innertube live_chat endpoint or an embed).
 - Context menu on VOD cards: mark watched/unwatched, clear progress.
+
+## License
+
+[MIT](LICENSE)
