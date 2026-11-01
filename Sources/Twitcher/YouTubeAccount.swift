@@ -99,7 +99,7 @@ final class YouTubeAccount: ObservableObject {
     /// WebKit's own cookie file.
     private func saveSession() async {
         let cookies = await dataStore.httpCookieStore.allCookies()
-            .filter { $0.domain.hasSuffix("youtube.com") || $0.domain.contains("google.") }
+            .filter { Self.isCookie($0, for: "youtube.com") || Self.isCookie($0, for: "google.com") }
         let saved = cookies.compactMap(\.properties).map { properties in
             Dictionary(uniqueKeysWithValues: properties.map { ($0.key.rawValue, $0.value) })
         }
@@ -135,7 +135,14 @@ final class YouTubeAccount: ObservableObject {
 
     private func youtubeCookies() async -> [HTTPCookie] {
         await dataStore.httpCookieStore.allCookies()
-            .filter { $0.domain.hasSuffix("youtube.com") }
+            .filter { Self.isCookie($0, for: "youtube.com") }
+    }
+
+    /// Exact domain or subdomain match, so lookalikes such as
+    /// "notyoutube.com" never get the session.
+    private static func isCookie(_ cookie: HTTPCookie, for domain: String) -> Bool {
+        let host = cookie.domain.hasPrefix(".") ? String(cookie.domain.dropFirst()) : cookie.domain
+        return host == domain || host.hasSuffix("." + domain)
     }
 }
 
