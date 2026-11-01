@@ -78,6 +78,30 @@ enum ChannelStore {
         }
     }
 
+    /// Sorts a platform's entries to match `names` (normalized, as loaded),
+    /// keeping each entry as written. Unmatched entries go last.
+    static func reorder(_ platform: Platform, _ names: [String], in url: URL) throws {
+        try update(url) { config in
+            switch platform {
+            case .twitch:
+                config.channels = config.channels.map { sorted($0, by: names, key: normalizedTwitch) }
+            case .youtube:
+                config.youtube = config.youtube.map {
+                    sorted($0, by: names.map { $0.lowercased() }) { normalizedYouTube($0).lowercased() }
+                }
+            }
+        }
+    }
+
+    private static func sorted(_ entries: [String], by names: [String], key: (String) -> String) -> [String] {
+        let rank = Dictionary(names.enumerated().map { ($1, $0) }, uniquingKeysWith: { first, _ in first })
+        return entries.enumerated()
+            .sorted { a, b in
+                (rank[key(a.element)] ?? Int.max, a.offset) < (rank[key(b.element)] ?? Int.max, b.offset)
+            }
+            .map(\.element)
+    }
+
     private static func update(_ url: URL, _ change: (inout ConfigFile) -> Void) throws {
         var config = try JSONDecoder().decode(ConfigFile.self, from: Data(contentsOf: url))
         change(&config)

@@ -135,6 +135,7 @@ final class AppModel: ObservableObject {
                 avatarURL: nil, live: nil, vods: []
             )
         }
+        await youtubeAccount.restoreSession()
         await youtubeAccount.checkSignIn()
         await refresh()
     }
@@ -175,8 +176,8 @@ final class AppModel: ObservableObject {
         }
     }
 
-    /// Adds a subscribed channel to the sidebar and channels.json, then
-    /// selects it.
+    /// Adds a subscribed channel to the sidebar and channels.json. Doesn't
+    /// select it, so several can be added from the subscriptions page in a row.
     func addYouTubeChannel(_ subscription: YouTubeSubscription) {
         guard !isInSidebar(subscription) else { return }
         let channel = ChannelInfo(
@@ -189,18 +190,12 @@ final class AppModel: ObservableObject {
         if let configPath {
             try? ChannelStore.addYouTube(subscription.identifier, to: configPath)
         }
-        selectedChannelID = channel.id
 
         Task {
             guard let info = await YouTubeAPI().fetchChannel(handle: channel.login),
                   let index = channels.firstIndex(where: { $0.id == info.id })
             else { return }
             channels[index] = info
-            // Selected before its live status was known; start the stream
-            // now if it turns out to be live.
-            if selectedChannelID == info.id, info.live != nil, case .none = playback {
-                detailTab = .stream
-            }
         }
     }
 
@@ -217,11 +212,39 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// Applies a drag-reorder within one platform's section (`orderedIDs`
+    /// is that section's new order) and saves it to channels.json.
+    func reorderChannels(_ orderedIDs: [String]) {
+        let moved = orderedIDs.compactMap { id in channels.first { $0.id == id } }
+        guard let platform = moved.first?.platform else { return }
+        let others = channels.filter { $0.platform != platform }
+        // The list is kept grouped Twitch-first, matching the sidebar.
+        channels = platform == .twitch ? moved + others : others + moved
+        if let configPath {
+            try? ChannelStore.reorder(platform, moved.map(\.login), in: configPath)
+        }
+    }
+
     // MARK: - Navigation
+
+    /// Sidebar selection value for the "Add Channel…" item, which shows the
+    /// YouTube subscriptions page instead of a channel.
+    static let subscriptionsPageID = "#youtube-subscriptions"
+
+    var isShowingSubscriptions: Bool {
+        selectedChannelID == Self.subscriptionsPageID
+    }
+
+    func showSubscriptions() {
+        selectedChannelID = Self.subscriptionsPageID
+    }
 
     /// Called when the sidebar selection changes.
     func selectionChanged() {
         stopPlayback()
+        if isShowingSubscriptions, !youtubeAccount.isSignedIn {
+            youtubeAccount.showingSignIn = true
+        }
         guard let channel = selectedChannel else { return }
         detailTab = channel.live != nil ? .stream : .broadcasts
         applyTab()

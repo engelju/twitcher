@@ -7,12 +7,14 @@ with SwiftUI + AVPlayer.
 
 - **Channel sidebar** driven by `channels.json`, with Twitch and YouTube
   sections: live channels show what's on and start playing on selection;
-  offline channels open on their recent broadcasts. Right-click a channel
-  → **Remove from Sidebar** to drop it (also from `channels.json`).
+  offline channels open on their recent broadcasts. Drag channels to
+  reorder them within their section; right-click → **Remove from Sidebar**
+  to drop one. Both are saved to `channels.json`.
 - **YouTube sign-in** (Twitcher → Sign In to YouTube…, or **Add Channel…**
-  at the end of the sidebar's YouTube section): **Add Channel…** lists the
-  channels you're subscribed to, searchable, and adds any of them to the
-  sidebar and `channels.json` in one click.
+  at the end of the sidebar's YouTube section). **Add Channel…** opens a
+  page of the channels you're subscribed to, searchable, where any of them
+  can be added to the sidebar in one click. The login is remembered across
+  launches.
 - **Stream / Broadcasts tabs** in the toolbar: browse a channel's VOD
   archive even while it's live, and jump back to the stream with one click
   (switching tabs pauses/resumes playback).
@@ -85,7 +87,8 @@ Format:
 `channels` are Twitch logins; `youtube` are YouTube handles (the `@name`
 from the channel URL, with or without the @) or `UC…` channel IDs.
 Channels added from your subscriptions are appended here automatically,
-and removing a channel from the sidebar deletes its entry. The "Edit
+removing a channel from the sidebar deletes its entry, and dragging
+reorders the entries (each kept as you wrote it). The "Edit
 channels.json" button at the bottom of the sidebar reveals the active file
 in Finder.
 Restart the app (or hit refresh) after editing.
@@ -122,8 +125,12 @@ Restart the app (or hit refresh) after editing.
 
 - `YouTubeSignInView` shows Google's sign-in page in a web view (with a
   Safari user agent — Google rejects WKWebView's default one). The session
-  lives in WebKit's persistent data store, so it survives relaunches; sign
-  out from the app menu or the subscriptions popover.
+  lands in WebKit's cookie store, which doesn't reliably survive a relaunch
+  for an unbundled executable, so `YouTubeAccount` also saves the YouTube
+  and Google cookies to
+  `~/Library/Application Support/Twitcher/youtube-session.plist`
+  (owner-only permissions) and restores them at launch. Sign out from the
+  app menu or the subscriptions page; that deletes the file too.
 - `YouTubeAccount` copies the session cookies out of that store to load
   `/feed/channels`, collects every `channelRenderer` in its `ytInitialData`,
   and follows continuation tokens through the innertube browse API (signed

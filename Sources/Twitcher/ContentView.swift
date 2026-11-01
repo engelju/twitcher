@@ -12,7 +12,7 @@ struct ContentView: View {
 
     var body: some View {
         NavigationSplitView {
-            SidebarView(model: model, account: account)
+            SidebarView(model: model)
                 .navigationSplitViewColumnWidth(min: 200, ideal: 230)
         } detail: {
             DetailView(model: model)
@@ -29,7 +29,7 @@ struct ContentView: View {
         .sheet(isPresented: $account.showingSignIn, onDismiss: {
             // Straight on to picking channels after a successful sign-in.
             if account.isSignedIn {
-                account.showingSubscriptionPicker = true
+                model.showSubscriptions()
             }
         }) {
             YouTubeSignInView(account: account)
@@ -50,7 +50,7 @@ struct DetailView: View {
     /// Chat only exists for Twitch content, so the pane auto-hides on
     /// YouTube channels (the user's show/hide preference is untouched).
     private var chatSupported: Bool {
-        model.selectedChannel?.platform != .youtube
+        model.selectedChannel?.platform != .youtube && !model.isShowingSubscriptions
     }
 
     var body: some View {
@@ -90,12 +90,18 @@ struct DetailView: View {
                 .disabled(!chatSupported)
             }
         }
-        .navigationTitle(model.selectedChannel?.displayName ?? "Twitcher")
+        .navigationTitle(
+            model.isShowingSubscriptions
+                ? "YouTube Subscriptions"
+                : model.selectedChannel?.displayName ?? "Twitcher"
+        )
     }
 
     @ViewBuilder
     private var mainContent: some View {
-        if let channel = model.selectedChannel {
+        if model.isShowingSubscriptions {
+            SubscriptionsView(model: model, account: model.youtubeAccount)
+        } else if let channel = model.selectedChannel {
             switch model.detailTab {
             case .stream: streamContent(channel)
             case .broadcasts: broadcastsContent(channel)

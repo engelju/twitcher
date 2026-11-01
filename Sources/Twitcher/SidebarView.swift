@@ -3,7 +3,6 @@ import SwiftUI
 
 struct SidebarView: View {
     @ObservedObject var model: AppModel
-    @ObservedObject var account: YouTubeAccount
     @Environment(\.uiZoom) private var zoom
 
     var body: some View {
@@ -16,6 +15,7 @@ struct SidebarView: View {
                         ChannelRow(channel: channel)
                             .tag(channel.id)
                     }
+                    .onMove { move(twitch, from: $0, to: $1) }
                 }
             }
             // Shown even without YouTube channels so "Add Channel…" is
@@ -27,13 +27,15 @@ struct SidebarView: View {
                         ChannelRow(channel: channel)
                             .tag(channel.id)
                     }
+                    .onMove { move(youtube, from: $0, to: $1) }
                     addChannelRow
+                        .tag(AppModel.subscriptionsPageID)
                 }
             }
         }
         .listStyle(.sidebar)
         .contextMenu(forSelectionType: String.self) { ids in
-            if let id = ids.first {
+            if let id = ids.first, id != AppModel.subscriptionsPageID {
                 Button("Remove from Sidebar") {
                     model.removeChannel(id: id)
                 }
@@ -59,23 +61,19 @@ struct SidebarView: View {
         }
     }
 
-    /// Not tagged, so it's a button rather than a selectable channel.
+    /// Selecting it opens the subscriptions page in the main area.
     private var addChannelRow: some View {
-        Button {
-            account.showingSubscriptionPicker = true
-        } label: {
-            Label("Add Channel…", systemImage: "plus.circle")
-                .font(.system(size: 12 * zoom))
-                .foregroundStyle(.secondary)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .contentShape(Rectangle())
-        }
-        .buttonStyle(.plain)
-        .help("Add a channel you're subscribed to")
-        .popover(isPresented: $account.showingSubscriptionPicker, arrowEdge: .trailing) {
-            SubscriptionPicker(model: model, account: account)
-                .environment(\.uiZoom, zoom)
-        }
+        Label("Add Channel…", systemImage: "plus.circle")
+            .font(.system(size: 12 * zoom))
+            .foregroundStyle(.secondary)
+            .padding(.vertical, 2)
+            .help("Add a channel you're subscribed to")
+    }
+
+    private func move(_ section: [ChannelInfo], from source: IndexSet, to destination: Int) {
+        var ids = section.map(\.id)
+        ids.move(fromOffsets: source, toOffset: destination)
+        model.reorderChannels(ids)
     }
 
     private var footer: some View {

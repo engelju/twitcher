@@ -20,9 +20,12 @@ struct YouTubeSubscription: Identifiable, Hashable {
 /// YouTube sign-in state and the signed-in user's subscriptions.
 ///
 /// Signing in happens in a web view (`YouTubeSignInView`) backed by WebKit's
-/// default persistent data store, so the session survives relaunches. The
-/// session cookies are then read back out of that store to make
-/// authenticated requests — no API key or OAuth client needed.
+/// default data store. The session cookies are then read back out of that
+/// store to make authenticated requests — no API key or OAuth client needed.
+///
+/// WebKit's store claims to be persistent but doesn't reliably restore
+/// cookies for an unbundled executable (`swift run`), so the session is also
+/// saved to a file of our own and put back into the store at launch.
 @MainActor
 final class YouTubeAccount: ObservableObject {
     enum SubscriptionsState {
@@ -35,15 +38,22 @@ final class YouTubeAccount: ObservableObject {
     @Published private(set) var isSignedIn = false
     @Published private(set) var subscriptions: SubscriptionsState = .idle
     @Published var showingSignIn = false
-    /// The sidebar's "Add subscribed channel" popover.
-    @Published var showingSubscriptionPicker = false
 
     private var dataStore: WKWebsiteDataStore { .default() }
+
+    private static var sessionURL: URL {
+        FileManager.default
+            .urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
+            .appendingPathComponent("Twitcher/youtube-session.plist")
+    }
 
     /// Updates `isSignedIn` from the cookie store. YouTube sets SAPISID on
     /// .youtube.com once the Google sign-in has redirected back.
     func checkSignIn() async {
         let signedIn = await youtubeCookies().contains { $0.name == "SAPISID" }
+        if signedIn {
+            await saveSession()
+        }
         if signedIn != isSignedIn {
             isSignedIn = signedIn
             subscriptions = .idle
@@ -57,8 +67,50 @@ final class YouTubeAccount: ObservableObject {
             ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(),
             modifiedSince: .distantPast
         )
+        try? FileManager.default.removeItem(at: Self.sessionURL)
         isSignedIn = false
         subscriptions = .idle
+    }
+
+    // MARK: - Session file
+
+    /// Puts the saved session back into WebKit's cookie store, unless the
+    /// store already has one of its own. Call before `checkSignIn()`.
+    func restoreSession() async {
+        guard !(await youtubeCookies().contains { $0.name == "SAPISID" }),
+              let data = try? Data(contentsOf: Self.sessionURL),
+              let saved = try? PropertyListSerialization.propertyList(from: data, format: nil)
+                as? [[String: Any]]
+        else { return }
+        let store = dataStore.httpCookieStore
+        for properties in saved {
+            let cookieProperties = Dictionary(uniqueKeysWithValues: properties.map {
+                (HTTPCookiePropertyKey($0.key), $0.value)
+            })
+            guard let cookie = HTTPCookie(properties: cookieProperties),
+                  (cookie.expiresDate ?? .distantFuture) > Date()
+            else { continue }
+            await store.setCookie(cookie)
+        }
+    }
+
+    /// Saves the YouTube and Google cookies (the Google ones keep the web
+    /// views signed in too). Readable by the current user only, like
+    /// WebKit's own cookie file.
+    private func saveSession() async {
+        let cookies = await dataStore.httpCookieStore.allCookies()
+            .filter { $0.domain.hasSuffix("youtube.com") || $0.domain.contains("google.") }
+        let saved = cookies.compactMap(\.properties).map { properties in
+            Dictionary(uniqueKeysWithValues: properties.map { ($0.key.rawValue, $0.value) })
+        }
+        guard let data = try? PropertyListSerialization.data(fromPropertyList: saved, format: .binary, options: 0)
+        else { return }
+        let url = Self.sessionURL
+        try? FileManager.default.createDirectory(
+            at: url.deletingLastPathComponent(),
+            withIntermediateDirectories: true
+        )
+        FileManager.default.createFile(atPath: url.path, contents: data, attributes: [.posixPermissions: 0o600])
     }
 
     func loadSubscriptions(force: Bool = false) async {
