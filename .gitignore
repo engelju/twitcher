@@ -3,4 +3,4 @@ build/
 .swiftpm/
 .DS_Store
 *.xcodeproj
-channels.json
+config/channels.json

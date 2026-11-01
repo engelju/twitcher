@@ -3,7 +3,7 @@ import Foundation
 /// Loads the list of channels the user cares about from channels.json.
 ///
 /// Search order:
-/// 1. `channels.json` in the current working directory (handy during `swift run`)
+/// 1. `config/channels.json` under the current working directory (handy during `swift run`)
 /// 2. `~/Library/Application Support/Twitcher/channels.json`
 ///
 /// If neither exists, a default file is written to Application Support so
@@ -30,7 +30,7 @@ enum ChannelStore {
     static func load() -> (entries: [(platform: Platform, name: String)], path: URL) {
         let candidates = [
             URL(fileURLWithPath: FileManager.default.currentDirectoryPath)
-                .appendingPathComponent("channels.json"),
+                .appendingPathComponent("config/channels.json"),
             applicationSupportURL,
         ]
 
