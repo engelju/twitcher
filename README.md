@@ -7,11 +7,12 @@ with SwiftUI + AVPlayer.
 
 - **Channel sidebar** driven by `channels.json`, with Twitch and YouTube
   sections: live channels show what's on and start playing on selection;
-  offline channels open on their recent broadcasts.
-- **YouTube sign-in** (Twitcher → Sign In to YouTube…, or the **+** next
-  to the sidebar's YouTube heading): the **+** lists the channels you're
-  subscribed to, searchable, and adds any of them to the sidebar and
-  `channels.json` in one click.
+  offline channels open on their recent broadcasts. Right-click a channel
+  → **Remove from Sidebar** to drop it (also from `channels.json`).
+- **YouTube sign-in** (Twitcher → Sign In to YouTube…, or **Add Channel…**
+  at the end of the sidebar's YouTube section): **Add Channel…** lists the
+  channels you're subscribed to, searchable, and adds any of them to the
+  sidebar and `channels.json` in one click.
 - **Stream / Broadcasts tabs** in the toolbar: browse a channel's VOD
   archive even while it's live, and jump back to the stream with one click
   (switching tabs pauses/resumes playback).
@@ -21,9 +22,11 @@ with SwiftUI + AVPlayer.
   seeking). Twitch only — the pane auto-hides on YouTube channels.
 - **Full archives**: Twitch broadcasts are listed completely (cursor
   pagination; VODs expire platform-side after 7–60 days anyway), and
-  YouTube channels list their ~100 most recent videos with durations via
-  yt-dlp (YouTube caps anonymous listing at one page; without yt-dlp the
-  RSS feed's latest 15 are shown).
+  YouTube channels list every upload with durations via yt-dlp (without
+  yt-dlp, the RSS feed's latest 15). **Shorts are left out**: the app
+  subtracts the channel's hidden shorts playlist (`UUSH…`) from its uploads
+  (`UU…`). Past livestreams stay in, which is why it doesn't use the
+  "long-form" playlist (`UULF…`) — that one omits them.
 - **Native playback** via AVPlayer: low-latency HLS for live streams,
   Picture-in-Picture and fullscreen from the player controls.
 - **Quality picker** in the toolbar, for both Twitch and YouTube. Defaults
@@ -81,8 +84,10 @@ Format:
 
 `channels` are Twitch logins; `youtube` are YouTube handles (the `@name`
 from the channel URL, with or without the @) or `UC…` channel IDs.
-Channels added from your subscriptions are appended here automatically. The "Edit channels.json"
-button at the bottom of the sidebar reveals the active file in Finder.
+Channels added from your subscriptions are appended here automatically,
+and removing a channel from the sidebar deletes its entry. The "Edit
+channels.json" button at the bottom of the sidebar reveals the active file
+in Finder.
 Restart the app (or hit refresh) after editing.
 
 ## How it works

@@ -56,11 +56,31 @@ enum ChannelStore {
         return (entries(from: defaults), url)
     }
 
-    /// Appends a YouTube channel to the config file at `url`, keeping the
-    /// rest of the file's contents.
+    /// Appends a YouTube channel to the config file at `url`.
     static func addYouTube(_ name: String, to url: URL) throws {
+        try update(url) { config in
+            config.youtube = (config.youtube ?? []) + [name]
+        }
+    }
+
+    /// Removes every entry for a channel from the config file at `url`,
+    /// however it was written (case, leading @, whitespace).
+    static func remove(_ platform: Platform, _ name: String, from url: URL) throws {
+        try update(url) { config in
+            switch platform {
+            case .twitch:
+                config.channels = config.channels?.filter { normalizedTwitch($0) != name }
+            case .youtube:
+                config.youtube = config.youtube?.filter {
+                    normalizedYouTube($0).lowercased() != name.lowercased()
+                }
+            }
+        }
+    }
+
+    private static func update(_ url: URL, _ change: (inout ConfigFile) -> Void) throws {
         var config = try JSONDecoder().decode(ConfigFile.self, from: Data(contentsOf: url))
-        config.youtube = (config.youtube ?? []) + [name]
+        change(&config)
         let encoder = JSONEncoder()
         encoder.outputFormatting = [.prettyPrinted, .sortedKeys, .withoutEscapingSlashes]
         try encoder.encode(config).write(to: url, options: .atomic)
@@ -68,14 +88,22 @@ enum ChannelStore {
 
     private static func entries(from config: ConfigFile) -> [(platform: Platform, name: String)] {
         let twitch = (config.channels ?? [])
-            .map { $0.lowercased().trimmingCharacters(in: .whitespaces) }
+            .map(normalizedTwitch)
             .filter { !$0.isEmpty }
             .map { (Platform.twitch, $0) }
         let youtube = (config.youtube ?? [])
-            .map { $0.trimmingCharacters(in: .whitespaces) }
-            .map { $0.hasPrefix("@") ? String($0.dropFirst()) : $0 }
+            .map(normalizedYouTube)
             .filter { !$0.isEmpty }
             .map { (Platform.youtube, $0) }
         return twitch + youtube
+    }
+
+    private static func normalizedTwitch(_ name: String) -> String {
+        name.lowercased().trimmingCharacters(in: .whitespaces)
+    }
+
+    private static func normalizedYouTube(_ name: String) -> String {
+        let trimmed = name.trimmingCharacters(in: .whitespaces)
+        return trimmed.hasPrefix("@") ? String(trimmed.dropFirst()) : trimmed
     }
 }

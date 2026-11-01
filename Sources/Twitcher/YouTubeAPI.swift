@@ -31,22 +31,61 @@ struct YouTubeAPI {
             live = LiveInfo(title: title ?? "Live", game: nil, viewers: 0, videoID: videoID)
         }
 
-        guard let feed = await fetchFeed(channelID: channelID) else { return nil }
+        guard let feed = await fetchFeed(query: "channel_id=\(channelID)") else { return nil }
 
         // The RSS feed only carries the latest 15 videos. When yt-dlp is
-        // available, list the channel's uploads playlist instead — up to 100
-        // videos, durations included (RSS still supplies the publish dates
+        // available, list the channel's uploads playlist instead — the full
+        // archive, durations included (RSS still supplies the publish dates
         // it knows). Without yt-dlp, fall back to the feed's 15.
         let rssDates = Dictionary(
             feed.entries.map { ($0.videoID, $0.published) },
             uniquingKeysWith: { first, _ in first }
         )
-        let vods = await fetchAllVideos(
+        var vods = await fetchAllVideos(
             channelID: channelID,
             rssDates: rssDates,
             excludingLiveID: live?.videoID
-        ) ?? feed.entries
-            .filter { $0.videoID != live?.videoID }
+        )
+        if vods == nil {
+            vods = await feedVideos(feed, channelID: channelID, excludingLiveID: live?.videoID)
+        }
+
+        return ChannelInfo(
+            platform: .youtube,
+            login: handle,
+            displayName: feed.channelTitle.isEmpty ? handle : feed.channelTitle,
+            avatarURL: avatarURL,
+            live: live,
+            vods: vods ?? [],
+            isPlaceholder: false,
+            youtubeChannelID: channelID
+        )
+    }
+
+    static func isChannelID(_ value: String) -> Bool {
+        value.count == 24 && value.hasPrefix("UC")
+    }
+
+    /// YouTube keeps hidden per-channel playlists keyed by the channel ID
+    /// with "UC" swapped for a prefix: UU = all uploads, UUSH = shorts.
+    /// (UULF, "long-form", would seem the obvious pick for "no shorts", but
+    /// it leaves out past livestreams.)
+    private static func playlistID(_ channelID: String, prefix: String) -> String {
+        prefix + channelID.dropFirst(2)
+    }
+
+    /// The RSS fallback, minus shorts. The shorts feed's latest 15 cover
+    /// every short among the uploads feed's latest 15, so subtracting it is
+    /// exact.
+    private func feedVideos(
+        _ feed: FeedParser.Result,
+        channelID: String,
+        excludingLiveID liveID: String?
+    ) async -> [VodInfo] {
+        let shorts = await fetchFeed(query: "playlist_id=\(Self.playlistID(channelID, prefix: "UUSH"))")
+        let shortIDs = Set(shorts?.entries.map(\.videoID) ?? [])
+        return feed.entries
+            .filter { $0.videoID != liveID && !shortIDs.contains($0.videoID) }
             .map { entry in
                 VodInfo(
                     platform: .youtube,
@@ -58,57 +97,28 @@ struct YouTubeAPI {
                     game: nil
                 )
             }
-
-        return ChannelInfo(
-            platform: .youtube,
-            login: handle,
-            displayName: feed.channelTitle.isEmpty ? handle : feed.channelTitle,
-            avatarURL: avatarURL,
-            live: live,
-            vods: vods,
-            isPlaceholder: false,
-            youtubeChannelID: channelID
-        )
-    }
-
-    static func isChannelID(_ value: String) -> Bool {
-        value.count == 24 && value.hasPrefix("UC")
     }
 
     // MARK: - Full video list via yt-dlp
 
-    /// Lists the channel's uploads playlist (UC… → UU…) with a flat
-    /// extraction. Returns nil when yt-dlp is unavailable or fails, so the
-    /// caller can fall back to the RSS feed.
+    /// Lists the channel's uploads playlist minus its shorts playlist, each
+    /// with a flat extraction (run in parallel). Returns nil when yt-dlp is
+    /// unavailable or fails, so the caller can fall back to the RSS feed.
     private func fetchAllVideos(
         channelID: String,
         rssDates: [String: Date?],
         excludingLiveID liveID: String?
     ) async -> [VodInfo]? {
         guard let binary = YouTubeResolver.findYTDLP() else { return nil }
-        let playlistID = "UU" + channelID.dropFirst(2)
-        guard let result = try? await Subprocess.run(binary, arguments: [
-            "--no-warnings",
-            "--flat-playlist",
-            "-J",
-            "https://www.youtube.com/playlist?list=\(playlistID)",
-        ]), result.status == 0 else { return nil }
-
-        struct FlatPlaylist: Decodable {
-            struct Entry: Decodable {
-                let id: String
-                let title: String?
-                let duration: Double?
-            }
-            let entries: [Entry]?
-        }
-        guard let flat = try? JSONDecoder().decode(FlatPlaylist.self, from: Data(result.stdout.utf8)),
-              let entries = flat.entries, !entries.isEmpty
-        else { return nil }
+        async let uploads = listPlaylist(Self.playlistID(channelID, prefix: "UU"), binary: binary)
+        // Fails (and so excludes nothing) for channels without shorts.
+        async let shorts = listPlaylist(Self.playlistID(channelID, prefix: "UUSH"), binary: binary)
+        guard let entries = await uploads, !entries.isEmpty else { return nil }
+        let shortIDs = Set((await shorts ?? []).map(\.id))
 
         // Entries without a duration are currently-live or upcoming streams.
         return entries
-            .filter { $0.id != liveID && ($0.duration ?? 0) > 0 }
+            .filter { $0.id != liveID && ($0.duration ?? 0) > 0 && !shortIDs.contains($0.id) }
             .map { entry in
                 VodInfo(
                     platform: .youtube,
@@ -120,6 +130,26 @@ struct YouTubeAPI {
                     game: nil
                 )
             }
+    }
+
+    private struct FlatEntry: Decodable {
+        let id: String
+        let title: String?
+        let duration: Double?
+    }
+
+    private func listPlaylist(_ playlistID: String, binary: String) async -> [FlatEntry]? {
+        guard let result = try? await Subprocess.run(binary, arguments: [
+            "--no-warnings",
+            "--flat-playlist",
+            "-J",
+            "https://www.youtube.com/playlist?list=\(playlistID)",
+        ]), result.status == 0 else { return nil }
+
+        struct FlatPlaylist: Decodable {
+            let entries: [FlatEntry]?
+        }
+        return (try? JSONDecoder().decode(FlatPlaylist.self, from: Data(result.stdout.utf8)))?.entries
     }
 
     private func thumbnailURL(for videoID: String) -> URL? {
@@ -145,8 +175,8 @@ struct YouTubeAPI {
         return String(data: data, encoding: .utf8)
     }
 
-    private func fetchFeed(channelID: String) async -> FeedParser.Result? {
-        guard let url = URL(string: "https://www.youtube.com/feeds/videos.xml?channel_id=\(channelID)"),
+    private func fetchFeed(query: String) async -> FeedParser.Result? {
+        guard let url = URL(string: "https://www.youtube.com/feeds/videos.xml?\(query)"),
               let (data, response) = try? await URLSession.shared.data(from: url),
               let http = response as? HTTPURLResponse, http.statusCode == 200
         else { return nil }

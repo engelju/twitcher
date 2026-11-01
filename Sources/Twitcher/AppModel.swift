@@ -204,6 +204,19 @@ final class AppModel: ObservableObject {
         }
     }
 
+    /// Removes a channel from the sidebar and channels.json.
+    func removeChannel(id: String) {
+        guard let channel = channels.first(where: { $0.id == id }) else { return }
+        if selectedChannelID == id {
+            // Stops playback via selectionChanged().
+            selectedChannelID = nil
+        }
+        channels.removeAll { $0.id == id }
+        if let configPath {
+            try? ChannelStore.remove(channel.platform, channel.login, from: configPath)
+        }
+    }
+
     // MARK: - Navigation
 
     /// Called when the sidebar selection changes.

@@ -18,21 +18,27 @@ struct SidebarView: View {
                     }
                 }
             }
-            // Shown even without YouTube channels so its "+" button is
-            // reachable — but only once the list has loaded: an empty section
-            // that gains rows trips an NSTableView reentrancy warning.
+            // Shown even without YouTube channels so "Add Channel…" is
+            // reachable — but only once the list has loaded: a section that
+            // gains rows on first load trips an NSTableView reentrancy warning.
             if !model.channels.isEmpty {
-                Section {
+                Section("YouTube") {
                     ForEach(youtube) { channel in
                         ChannelRow(channel: channel)
                             .tag(channel.id)
                     }
-                } header: {
-                    youtubeHeader
+                    addChannelRow
                 }
             }
         }
         .listStyle(.sidebar)
+        .contextMenu(forSelectionType: String.self) { ids in
+            if let id = ids.first {
+                Button("Remove from Sidebar") {
+                    model.removeChannel(id: id)
+                }
+            }
+        }
         .safeAreaInset(edge: .bottom) {
             footer
         }
@@ -53,21 +59,22 @@ struct SidebarView: View {
         }
     }
 
-    private var youtubeHeader: some View {
-        HStack {
-            Text("YouTube")
-            Spacer()
-            Button {
-                account.showingSubscriptionPicker = true
-            } label: {
-                Image(systemName: "plus")
-            }
-            .buttonStyle(.borderless)
-            .help("Add a channel you're subscribed to")
-            .popover(isPresented: $account.showingSubscriptionPicker, arrowEdge: .trailing) {
-                SubscriptionPicker(model: model, account: account)
-                    .environment(\.uiZoom, zoom)
-            }
+    /// Not tagged, so it's a button rather than a selectable channel.
+    private var addChannelRow: some View {
+        Button {
+            account.showingSubscriptionPicker = true
+        } label: {
+            Label("Add Channel…", systemImage: "plus.circle")
+                .font(.system(size: 12 * zoom))
+                .foregroundStyle(.secondary)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .help("Add a channel you're subscribed to")
+        .popover(isPresented: $account.showingSubscriptionPicker, arrowEdge: .trailing) {
+            SubscriptionPicker(model: model, account: account)
+                .environment(\.uiZoom, zoom)
         }
     }
 
