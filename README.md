@@ -57,8 +57,10 @@ To build a proper app bundle with icon:
 
 ```bash
 ./scripts/bundle.sh
-open build/Twitcher.app
 ```
+
+This installs `/Applications/Twitcher.app` (replacing the previous build),
+so it can be launched from Spotlight.
 
 For native YouTube playback, install yt-dlp (optional but recommended):
 
@@ -159,7 +161,8 @@ Restart the app (or hit refresh) after editing.
 **App bundle**
 - `scripts/bundle.sh` builds a release binary, draws the app icon with a
   small AppKit script (`scripts/make-icon.swift` → `iconutil`), assembles
-  `build/Twitcher.app`, and ad-hoc signs it.
+  `build/Twitcher.app`, ad-hoc signs it, and moves it to `/Applications`
+  (refusing to replace an app there with a different bundle ID).
 
 ## Caveats
 
