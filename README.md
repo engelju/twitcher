@@ -3,6 +3,8 @@
 A minimal native macOS app for watching Twitch and YouTube channels, built
 with SwiftUI + AVPlayer.
 
+![Twitcher showing a channel's recent broadcasts](docs/screenshot.png)
+
 ## Features
 
 - **Channel sidebar** driven by `channels.json`, with Twitch and YouTube
